@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import panoptesService from './services/panoptesService';
 import SubjectViewer from './components/SubjectViewer.jsx';
 import TaskUI from './components/TaskUI.jsx';
-import config from './config';
+import config from './configLoader';
 
 function App() {
   // Core state

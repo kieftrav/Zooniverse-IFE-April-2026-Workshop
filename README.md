@@ -12,6 +12,12 @@ npm install
 
 ### Configure your project
 
+Copy the example config to a new file:
+
+```bash
+cp src/config.example.js src/config.js
+```
+
 Edit `src/config.js` — set your Zooniverse project ID and (optionally) workflow ID:
 
 ```js
