@@ -201,6 +201,7 @@ function App() {
               <BrushTool
                 subject={currentSubject}
                 onAnnotate={setBrushAnnotationData}
+                brushConfig={config.brushTool}
               />
               {subjects.length > 0 && (
                 <div className="subject-progress">

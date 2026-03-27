@@ -2,6 +2,16 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import CanvasDraw from 'react-canvas-draw';
 
 /**
+ * Convert hex color to rgba with specified opacity
+ */
+function hexToRgba(hex, alpha = 0.5) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
  * BrushTool — canvas drawing tool for annotating subject images.
  *
  * Renders `react-canvas-draw` over the subject image. The brush stroke data
@@ -11,11 +21,12 @@ import CanvasDraw from 'react-canvas-draw';
  * Props:
  *   subject     — Panoptes subject (needs .locations for image URL)
  *   onAnnotate  — called with (saveData: string) on every stroke change
+ *   brushConfig — brush tool configuration { colors, opacity, defaultSize }
  */
-function BrushTool({ subject, onAnnotate }) {
+function BrushTool({ subject, onAnnotate, brushConfig }) {
   const canvasRef = useRef(null);
-  const [brushSize, setBrushSize] = useState(12);
-  const [brushColor, setBrushColor] = useState('#00ff00');
+  const [brushSize, setBrushSize] = useState(brushConfig?.defaultSize || 12);
+  const [brushColor, setBrushColor] = useState(brushConfig?.colors?.[0] || '#00ff00');
 
   const imageUrl = subject ? getImageUrl(subject) : null;
 
@@ -61,12 +72,12 @@ function BrushTool({ subject, onAnnotate }) {
           ref={canvasRef}
           onChange={handleChange}
           imgSrc={imageUrl || ''}
-          brushColor={brushColor}
+          brushColor={hexToRgba(brushColor, brushConfig?.opacity || 0.5)}
           brushRadius={brushSize}
           canvasWidth={500}
           canvasHeight={500}
           lazyRadius={0}
-          catenaryColor={brushColor}
+          catenaryColor={hexToRgba(brushColor, brushConfig?.opacity || 0.5)}
           hideInterface={false}
           backgroundColor="#000"
         />
@@ -86,7 +97,7 @@ function BrushTool({ subject, onAnnotate }) {
         </label>
 
         <div className="brush-colors">
-          {['#00ff00', '#ff0000', '#00bfff', '#ffff00', '#ff00ff', '#ffffff'].map(c => (
+          {(brushConfig?.colors || ['#00ff00', '#ff0000', '#00bfff', '#ffff00', '#ff00ff', '#ffffff']).map(c => (
             <button
               key={c}
               className={`brush-color-btn${brushColor === c ? ' active' : ''}`}
