@@ -41,5 +41,8 @@ lerna-debug.log*
 .settings/
 *.sublime-workspace
 
+# SSL certificates (local dev)
+.ssl/
+
 # OS files
 Thumbs.db

@@ -1,12 +1,12 @@
-# Zoo Playground — Zooniverse IFE Classifier Template
+# Zooniverse IFE April 2026 Workshop
 
 A forkable, config-driven Zooniverse classifier. Point it at any Zooniverse project and get a working classification interface.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/zoo-playground.git
-cd zoo-playground
+git clone https://github.com/kieftrav/Zooniverse-IFE-April-2026-Workshop.git
+cd Zooniverse-IFE-April-2026-Workshop
 npm install
 ```
 
@@ -37,19 +37,102 @@ VITE_PANOPTES_PASSWORD=your_password
 
 The app will sign in automatically on startup. Without a `.env`, it runs in anonymous mode. The header shows your auth status.
 
+### OAuth Login (optional)
+
+OAuth lets users log in via Zooniverse's own login page instead of storing credentials locally. When configured, a **"Log in with Zooniverse"** button appears in the header.
+
+#### 1. Register an OAuth application
+
+Go to https://panoptes.zooniverse.org/oauth/applications and create a new application:
+
+- **Name:** whatever you like (e.g. "My Classifier")
+- **Redirect URI:** `https://zooniverse.local.test/oauth/callback`
+  - Add `urn:ietf:wg:oauth:2.0:oob` on a second line (the UI suggests this for local testing)
+- **Scopes:** check all that apply to your use case
+
+After submitting, you'll receive an **Application ID** and a **Secret**.
+
+#### 2. Set up local HTTPS
+
+OAuth requires HTTPS. The dev server uses mkcert certificates for `*.local.test`:
+
+```bash
+# Install mkcert (one-time)
+brew install mkcert
+mkcert -install
+
+# Generate certs
+mkdir -p .ssl
+cd .ssl
+mkcert "*.local.test" "local.test"
+cd ..
+```
+
+This creates `.ssl/_wildcard.local.test+1.pem` and `.ssl/_wildcard.local.test+1-key.pem`. The `.ssl/` directory is gitignored.
+
+> **Cert expiry:** mkcert certs are valid for ~2 years. Check with:
+> `openssl x509 -enddate -noout -in .ssl/_wildcard.local.test+1.pem`
+
+Add `zooniverse.local.test` to your hosts file if not already present:
+
+```bash
+echo "127.0.0.1 zooniverse.local.test" | sudo tee -a /etc/hosts
+```
+
+#### 3. Configure OAuth in `src/config.js`
+
+```js
+oauthClientId: 'YOUR_APPLICATION_ID',
+oauthClientSecret: 'YOUR_SECRET',
+oauthRedirectUri: 'https://zooniverse.local.test/oauth/callback',
+```
+
+#### 4. Start the dev server
+
+```bash
+npx vite --host
+```
+
+The server runs on **https://zooniverse.local.test** (port 443). Open that URL in your browser and click "Log in with Zooniverse".
+
+The OAuth flow:
+1. User clicks "Log in with Zooniverse"
+2. Browser redirects to `www.zooniverse.org/oauth/authorize`
+3. User signs in and authorizes the app
+4. Zooniverse redirects back with an authorization code
+5. The app exchanges the code for an access token (via the Vite proxy)
+6. The token is stored in localStorage and persists across page reloads
+
+#### How it works
+
+| File | Role |
+|------|------|
+| `src/config.js` | OAuth client ID, secret, and redirect URI |
+| `src/services/panoptesService.js` | `getOAuthLoginUrl()`, `exchangeCodeForToken()`, token storage |
+| `src/App.jsx` | Detects `?code=` callback, manages auth state, renders login/sign-out button |
+| `vite.config.js` | HTTPS config, `/zooniverse` proxy to `www.zooniverse.org` |
+
+> **Note:** The token exchange uses a Vite proxy (`/zooniverse` → `www.zooniverse.org`) because the Zooniverse `/oauth/token` endpoint does not support CORS. The Panoptes API endpoints (`/api/*`) support CORS and are called directly.
+
 ### Run
 
 ```bash
-npm start
+npx vite --host
 ```
 
-Open http://localhost:3002.
+Open https://zooniverse.local.test.
 
-You can also override config via URL params:
+For HTTP-only (no OAuth), you can still run on any port:
+
+```bash
+VITE_PORT=3002 npx vite
+```
+
+You can override config via URL params:
 
 ```
-http://localhost:3002/?project=31425
-http://localhost:3002/?project=31425&workflow=30447
+https://zooniverse.local.test/?project=31425
+https://zooniverse.local.test/?project=31425&workflow=30447&env=staging
 ```
 
 ## Classifying
@@ -67,16 +150,17 @@ This only works during local development (the Vite dev server writes files to di
 
 ```
 src/
-  config.js               # Your project/workflow IDs, environment, links
-  App.js                  # The classify loop (load → annotate → submit → next)
+  config.js               # Project/workflow IDs, OAuth credentials, links
+  App.jsx                 # The classify loop (load → annotate → submit → next)
   components/
-    SubjectViewer.js      # Displays subject images
-    TaskUI.js             # Renders workflow tasks as forms
+    SubjectViewer.jsx     # Displays subject images
+    TaskUI.jsx            # Renders workflow tasks as forms
   services/
-    panoptesService.js    # Panoptes API client
+    panoptesService.js    # Panoptes API client + OAuth + token management
   index.css               # Styles
-.env.example              # Template for credentials
-vite.config.js            # Dev server, auth proxy, export-to-disk middleware
+.env.example              # Template for password-based auth credentials
+.ssl/                     # mkcert certificates for local HTTPS (gitignored)
+vite.config.js            # Dev server, HTTPS, auth proxy, export-to-disk middleware
 exports/                  # Exported JSON (gitignored)
 ```
 
@@ -84,7 +168,8 @@ exports/                  # Exported JSON (gitignored)
 
 | Command | Description |
 |---|---|
-| `npm start` | Dev server on http://localhost:3002 |
+| `npx vite --host` | HTTPS dev server on https://zooniverse.local.test (port 443) |
+| `VITE_PORT=3002 npx vite` | HTTP dev server on http://localhost:3002 |
 | `npm run build` | Production build to `dist/` |
 | `npm run preview` | Preview production build |
 | `npm run lint` | Check code style |

@@ -30,6 +30,8 @@ function App() {
   // Task-type-specific validation belongs in TaskUI if needed later.
   const hasAnnotation = true;
 
+  const oauthEnabled = config.oauthClientId && config.oauthClientSecret && config.oauthRedirectUri;
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const projectId = params.get('project') || config.projectId;
@@ -37,6 +39,21 @@ function App() {
     const env = params.get('env') || config.environment;
 
     setEnvironment(env);
+
+    // Handle OAuth callback — ?code= in URL means we're returning from Panoptes
+    const oauthCode = params.get('code');
+    if (oauthCode && oauthEnabled) {
+      // Strip code and redirect back to root with remaining params
+      params.delete('code');
+      const cleanSearch = params.toString();
+      const cleanUrl = '/' + (cleanSearch ? '?' + cleanSearch : '');
+      window.history.replaceState({}, '', cleanUrl);
+
+      handleOAuthCallback(oauthCode, env).then(() => {
+        if (projectId) initialize(projectId, workflowId, env);
+      });
+      return;
+    }
 
     if (projectId) {
       initialize(projectId, workflowId, env);
@@ -46,20 +63,44 @@ function App() {
     }
   }, []);
 
+  const handleOAuthCallback = async (code, env) => {
+    try {
+      await panoptesService.exchangeCodeForToken(code);
+      const user = await panoptesService.getAuthenticatedUser(env);
+      setAuthUser(user?.login || user?.display_name || 'authenticated');
+    } catch (err) {
+      console.error('OAuth callback failed:', err.message);
+    }
+  };
+
   const initialize = async (projectId, workflowId, env) => {
     setLoading(true);
     setError(null);
 
     try {
-      // Auto-auth from .env if credentials present
-      const username = import.meta.env.VITE_PANOPTES_USERNAME;
-      const password = import.meta.env.VITE_PANOPTES_PASSWORD;
-      if (username && password && !panoptesService.isAuthenticated()) {
-        try {
-          const { user } = await panoptesService.signIn(username, password, env);
-          setAuthUser(user?.login || username);
-        } catch (authErr) {
-          console.warn('Auto-auth failed, continuing as anonymous:', authErr.message);
+      // Auth priority: 1) existing token, 2) stored OAuth token, 3) env-var password
+      if (!panoptesService.isAuthenticated()) {
+        if (panoptesService.loadStoredToken()) {
+          try {
+            const user = await panoptesService.getAuthenticatedUser(env);
+            setAuthUser(user?.login || user?.display_name || 'authenticated');
+          } catch (err) {
+            console.warn('Stored token invalid, clearing:', err.message);
+            panoptesService.signOut();
+          }
+        }
+      }
+
+      if (!panoptesService.isAuthenticated()) {
+        const username = import.meta.env.VITE_PANOPTES_USERNAME;
+        const password = import.meta.env.VITE_PANOPTES_PASSWORD;
+        if (username && password) {
+          try {
+            const { user } = await panoptesService.signIn(username, password, env);
+            setAuthUser(user?.login || username);
+          } catch (authErr) {
+            console.warn('Auto-auth failed, continuing as anonymous:', authErr.message);
+          }
         }
       }
 
@@ -151,7 +192,7 @@ function App() {
           user_agent: navigator.userAgent,
           user_language: navigator.language,
           utc_offset: String(new Date().getTimezoneOffset() * 60),
-          source: 'zoo-playground',
+          source: 'zooniverse-ife',
           viewport: { width: window.innerWidth, height: window.innerHeight }
         },
         links: {
@@ -174,6 +215,11 @@ function App() {
     }
   };
 
+  const handleSignOut = () => {
+    panoptesService.signOut();
+    setAuthUser(null);
+  };
+
   const talkUrl = config.links.talkBoard ||
     (project ? `https://www.zooniverse.org/projects/${project.slug}/talk` : null);
 
@@ -189,6 +235,15 @@ function App() {
           </span>
         </div>
         <nav className="header-nav">
+          {authUser ? (
+            <button onClick={handleSignOut} className="tab-button">
+              Sign out ({authUser})
+            </button>
+          ) : oauthEnabled ? (
+            <a href={panoptesService.getOAuthLoginUrl()} className="oauth-login-button">
+              Log in with Zooniverse
+            </a>
+          ) : null}
           <button
             onClick={() => setActiveTab('classify')}
             className={`tab-button ${activeTab === 'classify' ? 'active' : ''}`}
@@ -343,7 +398,7 @@ function App() {
 
       <footer className="app-footer">
         <span className="text-muted" style={{ fontSize: '11px' }}>
-          Powered by Zooniverse · Panoptes API · zoo-playground
+          Powered by Zooniverse · Panoptes API · Zooniverse IFE Workshop
         </span>
       </footer>
     </div>

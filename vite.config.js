@@ -34,6 +34,17 @@ function exportPlugin() {
   };
 }
 
+// SSL: serve HTTPS when certs are present in .ssl/, fall back to HTTP otherwise.
+// Generate certs with mkcert: mkdir -p .ssl && cd .ssl && mkcert "*.local.test" "local.test"
+const sslCert = path.resolve(process.cwd(), '.ssl/_wildcard.local.test+1.pem');
+const sslKey = path.resolve(process.cwd(), '.ssl/_wildcard.local.test+1-key.pem');
+const hasSSL = fs.existsSync(sslCert) && fs.existsSync(sslKey);
+
+if (!hasSSL) {
+  console.warn('No SSL certs found in .ssl/ — running HTTP only.');
+  console.warn('  Generate with: mkdir -p .ssl && cd .ssl && mkcert "*.local.test" "local.test"');
+}
+
 export default defineConfig({
   plugins: [react(), exportPlugin()],
   define: {
@@ -41,7 +52,13 @@ export default defineConfig({
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
   },
   server: {
-    port: 3002,
+    port: parseInt(process.env.VITE_PORT || '443'),
+    ...(hasSSL ? {
+      https: {
+        cert: fs.readFileSync(sslCert),
+        key: fs.readFileSync(sslKey)
+      }
+    } : {}),
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

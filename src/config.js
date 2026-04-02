@@ -1,5 +1,5 @@
 /**
- * Zoo Playground Configuration
+ * Zooniverse IFE Workshop Configuration
  *
  * Fork this repo, change these values to your Zooniverse project,
  * and you have a working custom classifier.
@@ -18,14 +18,20 @@ const config = {
   subjectBatchSize: 10,
 
   // Project metadata (displayed in the UI)
-  title: 'Zoo Playground Classifier',
+  title: 'Zooniverse IFE Classifier',
+
+  // OAuth — set these in .env (see .env.example). When all three are set,
+  // a "Log in with Zooniverse" button appears in the header.
+  oauthClientId: import.meta.env.VITE_OAUTH_CLIENT_ID || null,
+  oauthClientSecret: import.meta.env.VITE_OAUTH_CLIENT_SECRET || null,
+  oauthRedirectUri: import.meta.env.VITE_OAUTH_REDIRECT_URI || null,
 
   // Data rights / privacy / Terms & Conditions
   links: {
     privacyPolicy: 'https://www.zooniverse.org/privacy',
     termsOfUse: 'https://www.zooniverse.org/privacy#terms',
-    dataRetention: null, // Add your project-specific data retention URL
-    talkBoard: null,     // Auto-populated from project ID if null
+    dataRetention: null,
+    talkBoard: null, // auto-populated from project if null
   }
 };
 

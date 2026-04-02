@@ -1,110 +1,175 @@
 import axios from 'axios';
+import config from '../config';
 
 const API_URLS = {
   production: 'https://panoptes.zooniverse.org/api',
   staging: 'https://panoptes-staging.zooniverse.org/api'
 };
 
-const headers = {
+const OAUTH_URLS = {
+  production: 'https://www.zooniverse.org',
+  staging: 'https://panoptes-staging.zooniverse.org'
+};
+
+const JSONAPI_HEADERS = {
   'Accept': 'application/vnd.api+json; version=1',
   'Content-Type': 'application/json'
 };
+
+const TOKEN_KEY = 'zooniverse_ife_oauth_token';
 
 let bearerToken = null;
 let tokenExpiry = 0;
 
 const panoptesService = {
+
+  // ── Data endpoints ────────────────────────────────────────────────
+
   async getProject(projectId, environment = 'production') {
-    const apiUrl = API_URLS[environment] || API_URLS.production;
-    const response = await axios.get(`${apiUrl}/projects/${projectId}`, { headers });
-    return response.data.projects[0];
+    const url = API_URLS[environment] || API_URLS.production;
+    const res = await axios.get(`${url}/projects/${projectId}`, { headers: JSONAPI_HEADERS });
+    return res.data.projects[0];
   },
 
   async getWorkflow(workflowId, environment = 'production') {
-    const apiUrl = API_URLS[environment] || API_URLS.production;
-    const response = await axios.get(`${apiUrl}/workflows/${workflowId}`, { headers });
-    return response.data.workflows[0];
+    const url = API_URLS[environment] || API_URLS.production;
+    const res = await axios.get(`${url}/workflows/${workflowId}`, { headers: JSONAPI_HEADERS });
+    return res.data.workflows[0];
   },
 
   async getActiveWorkflow(projectId, environment = 'production') {
     const project = await this.getProject(projectId, environment);
-    const activeWorkflows = project.links?.active_workflows || [];
-    if (activeWorkflows.length === 0) {
-      throw new Error(`Project ${projectId} has no active workflows`);
-    }
-    return this.getWorkflow(activeWorkflows[0], environment);
+    const ids = project.links?.active_workflows || [];
+    if (ids.length === 0) throw new Error(`Project ${projectId} has no active workflows`);
+    return this.getWorkflow(ids[0], environment);
   },
 
   async getSubjectSets(workflowId, environment = 'production') {
-    const apiUrl = API_URLS[environment] || API_URLS.production;
+    const url = API_URLS[environment] || API_URLS.production;
     const workflow = await this.getWorkflow(workflowId, environment);
-    const subjectSetIds = workflow.links?.subject_sets || [];
-    if (subjectSetIds.length === 0) return [];
-    const response = await axios.get(`${apiUrl}/subject_sets`, {
-      headers,
-      params: { id: subjectSetIds.join(',') }
+    const ids = workflow.links?.subject_sets || [];
+    if (ids.length === 0) return [];
+    const res = await axios.get(`${url}/subject_sets`, {
+      headers: JSONAPI_HEADERS,
+      params: { id: ids.join(',') }
     });
-    return response.data.subject_sets || [];
+    return res.data.subject_sets || [];
   },
 
   async getSubjects(workflowId, environment = 'production', pageSize = 10) {
-    const apiUrl = API_URLS[environment] || API_URLS.production;
+    const url = API_URLS[environment] || API_URLS.production;
 
-    // Try the queued endpoint first (what FEM's classifier uses)
     try {
-      const response = await axios.get(`${apiUrl}/subjects/queued`, {
+      const res = await axios.get(`${url}/subjects/queued`, {
         headers: this.getAuthHeaders(),
         params: { workflow_id: workflowId, page_size: pageSize, http_cache: true }
       });
-      if (response.data.subjects?.length > 0) {
-        return response.data.subjects;
-      }
-    } catch (e) {
-      // queued endpoint may require auth; fall back
+      if (res.data.subjects?.length > 0) return res.data.subjects;
+    } catch {
+      // queued endpoint may require auth; fall back to subject sets
     }
 
-    // Fallback: subjects via workflow's linked subject sets
     const workflow = await this.getWorkflow(workflowId, environment);
-    const subjectSetIds = workflow.links?.subject_sets || [];
-    if (subjectSetIds.length === 0) {
-      throw new Error(`Workflow ${workflowId} has no linked subject sets`);
-    }
-    const response = await axios.get(`${apiUrl}/subjects`, {
-      headers,
-      params: { subject_set_id: subjectSetIds[0], page_size: pageSize, http_cache: true }
+    const ids = workflow.links?.subject_sets || [];
+    if (ids.length === 0) throw new Error(`Workflow ${workflowId} has no linked subject sets`);
+    const res = await axios.get(`${url}/subjects`, {
+      headers: JSONAPI_HEADERS,
+      params: { subject_set_id: ids[0], page_size: pageSize, http_cache: true }
     });
-    return response.data.subjects || [];
+    return res.data.subjects || [];
   },
 
-  // Browser auth uses the Vite proxy at /zooniverse/ to avoid CORS.
-  // The proxy rewrites to https://www.zooniverse.org (production) or
-  // https://panoptes-staging.zooniverse.org (staging).
-  async signIn(login, password, environment = 'production') {
-    const proxy = '/zooniverse';
-
-    const authHeaders = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
-
-    const csrfResponse = await axios.get(
-      `${proxy}/users/sign_in/?now=${Date.now()}`,
-      { headers: authHeaders, withCredentials: true }
+  async createClassification(classificationData, environment = 'production') {
+    const url = API_URLS[environment] || API_URLS.production;
+    const res = await axios.post(
+      `${url}/classifications`,
+      { classifications: classificationData },
+      { headers: this.getAuthHeaders() }
     );
-    const csrfToken = csrfResponse.headers['x-csrf-token'];
+    return res.data;
+  },
 
-    const signInResponse = await axios.post(
+  async getAuthenticatedUser(environment = 'production') {
+    const url = API_URLS[environment] || API_URLS.production;
+    const res = await axios.get(`${url}/me`, { headers: this.getAuthHeaders() });
+    return res.data.users?.[0] || null;
+  },
+
+  // ── Password auth (uses Vite proxy for CORS/CSRF) ────────────────
+
+  async signIn(login, password) {
+    const proxy = '/zooniverse';
+    const h = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
+
+    const csrf = await axios.get(`${proxy}/users/sign_in/?now=${Date.now()}`, {
+      headers: h, withCredentials: true
+    });
+
+    const signIn = await axios.post(
       `${proxy}/users/sign_in`,
       { user: { login, password, remember_me: true } },
-      { headers: { ...authHeaders, 'X-CSRF-Token': csrfToken }, withCredentials: true }
+      { headers: { ...h, 'X-CSRF-Token': csrf.headers['x-csrf-token'] }, withCredentials: true }
     );
 
-    const tokenResponse = await axios.post(
+    const token = await axios.post(
       `${proxy}/oauth/token`,
       { grant_type: 'password', client_id: 'f79cf5ea821bb161d8cbb52d061ab9a2321d7cb169007003af66b43f7b79ce2a' },
-      { headers: authHeaders, withCredentials: true }
+      { headers: h, withCredentials: true }
     );
 
-    bearerToken = tokenResponse.data.access_token;
-    tokenExpiry = Date.now() + (tokenResponse.data.expires_in * 1000) - 60000;
-    return { user: signInResponse.data, token: bearerToken };
+    bearerToken = token.data.access_token;
+    tokenExpiry = Date.now() + (token.data.expires_in * 1000) - 60000;
+    return { user: signIn.data, token: bearerToken };
+  },
+
+  // ── OAuth authorization code flow ────────────────────────────────
+
+  getOAuthLoginUrl() {
+    const base = OAUTH_URLS[config.environment] || OAUTH_URLS.production;
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: config.oauthClientId,
+      redirect_uri: config.oauthRedirectUri,
+      scope: 'user project group collection classification subject medium organization translation public'
+    });
+    return `${base}/oauth/authorize?${params}`;
+  },
+
+  async exchangeCodeForToken(code) {
+    // Token exchange goes through the Vite proxy (/zooniverse → www.zooniverse.org)
+    // because the /oauth/token endpoint doesn't support CORS.
+    const res = await axios.post('/zooniverse/oauth/token', {
+      grant_type: 'authorization_code',
+      client_id: config.oauthClientId,
+      client_secret: config.oauthClientSecret,
+      redirect_uri: config.oauthRedirectUri,
+      code
+    });
+    this.setToken(res.data.access_token, res.data.expires_in);
+    return res.data;
+  },
+
+  // ── Token management ─────────────────────────────────────────────
+
+  setToken(token, expiresIn) {
+    bearerToken = token;
+    tokenExpiry = Date.now() + (expiresIn * 1000) - 60000;
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token: bearerToken, expiry: tokenExpiry }));
+  },
+
+  loadStoredToken() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(TOKEN_KEY));
+      if (stored?.token && stored.expiry > Date.now()) {
+        bearerToken = stored.token;
+        tokenExpiry = stored.expiry;
+        return true;
+      }
+    } catch {
+      // corrupt entry
+    }
+    localStorage.removeItem(TOKEN_KEY);
+    return false;
   },
 
   isAuthenticated() {
@@ -112,23 +177,14 @@ const panoptesService = {
   },
 
   getAuthHeaders() {
-    if (!this.isAuthenticated()) return headers;
-    return { ...headers, Authorization: `Bearer ${bearerToken}` };
-  },
-
-  async createClassification(classificationData, environment = 'production') {
-    const apiUrl = API_URLS[environment] || API_URLS.production;
-    const response = await axios.post(
-      `${apiUrl}/classifications`,
-      { classifications: classificationData },
-      { headers: this.getAuthHeaders() }
-    );
-    return response.data;
+    if (!this.isAuthenticated()) return JSONAPI_HEADERS;
+    return { ...JSONAPI_HEADERS, Authorization: `Bearer ${bearerToken}` };
   },
 
   signOut() {
     bearerToken = null;
     tokenExpiry = 0;
+    localStorage.removeItem(TOKEN_KEY);
   }
 };
 
