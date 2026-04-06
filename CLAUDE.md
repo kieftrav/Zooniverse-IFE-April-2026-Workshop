@@ -1,4 +1,4 @@
-# Zoo Playground — Zooniverse IFE Classifier Template
+# Zooniverse IFE April 2026 Workshop
 
 ## Overview
 Forkable, config-driven Zooniverse classifier. The "Hello World" of building a custom Panoptes classifier using the SDK approach (direct API calls) rather than forking the full FEM monorepo.
