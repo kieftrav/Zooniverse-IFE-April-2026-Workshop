@@ -1,18 +1,345 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Experimental Zooniverse Classifier"
-    />
-    <title>Experimental Zooniverse Classifier</title>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-    <script type="module" src="/src/index.jsx"></script>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zooniverse Incubator Front-Ends</title>
+  <meta name="description" content="Custom classification front-ends built for the Zooniverse citizen science platform." />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg-card: #1a1d2e;
+      --bg-card-hover: #222640;
+      --accent: #00c853;
+      --accent-dim: rgba(0, 200, 83, 0.15);
+      --text: #e0e0e0;
+      --text-muted: #8a8fa8;
+      --text-heading: #ffffff;
+      --border: #2a2e42;
+      --radius: 12px;
+      --max-width: 1100px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Section */
+    .section {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 64px 24px;
+    }
+    .section-header {
+      margin-bottom: 48px;
+    }
+    .section-badge {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 6px 16px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+    }
+    .section h1 {
+      font-size: 40px;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .section-header > p {
+      color: var(--text-muted);
+      font-size: 17px;
+      max-width: 660px;
+    }
+
+    /* Project Cards */
+    .projects {
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+    }
+    .project-card {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: start;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .project-card:hover {
+      border-color: rgba(0, 200, 83, 0.3);
+      box-shadow: 0 0 40px rgba(0, 200, 83, 0.05);
+    }
+    .project-screenshot {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: block;
+    }
+    .project-info h3 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin-bottom: 8px;
+    }
+    .project-tagline {
+      font-size: 15px;
+      color: var(--accent);
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+    .project-description {
+      color: var(--text-muted);
+      font-size: 15px;
+      margin-bottom: 20px;
+    }
+    .project-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .project-meta-item {
+      display: flex;
+      gap: 8px;
+    }
+    .project-meta-label {
+      color: var(--text-muted);
+      min-width: 70px;
+      flex-shrink: 0;
+    }
+    .project-meta-value {
+      color: var(--text);
+    }
+    .tech-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .tech-tag {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .project-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .project-links a {
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      color: var(--text);
+      transition: all 0.2s;
+    }
+    .project-links a:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .project-links a.live-link {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0f1117;
+    }
+    .project-links a.live-link:hover {
+      background: #00e05c;
+    }
+
+    /* Footer */
+    .footer {
+      border-top: 1px solid var(--border);
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+    .footer p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .section h1 { font-size: 28px; }
+      .project-card { grid-template-columns: 1fr; }
+      .section { padding: 40px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <section class="section">
+    <div class="section-header">
+      <div class="section-badge">Zooniverse Incubator Front-Ends</div>
+      <h1>IFE Projects</h1>
+      <p>
+        Each front-end implements a custom workflow for data collection on the
+        <a href="https://www.zooniverse.org" target="_blank">Zooniverse</a> citizen science platform,
+        tailored to the specific needs of its science domain.
+      </p>
+    </div>
+
+    <div class="projects">
+
+      <!-- Cosmic Canvas -->
+      <article class="project-card">
+        <img class="project-screenshot" src="screenshots/cosmic-canvas.png" alt="Cosmic Canvas screenshot" />
+        <div class="project-info">
+          <h3>Cosmic Canvas</h3>
+          <div class="project-tagline">Brush-tool classifier for galaxy morphology</div>
+          <p class="project-description">
+            A drawing-based classifier built for annotation tasks where volunteers paint over
+            features in astronomical images using a configurable brush tool &mdash; identifying
+            tidal tails, star-forming regions, and other morphological structures in galaxy imagery.
+          </p>
+          <div class="project-meta">
+            <div class="project-meta-item">
+              <span class="project-meta-label">Author</span>
+              <span class="project-meta-value">Hayley Roberts (<a href="https://github.com/astrohayley" target="_blank">@astrohayley</a>)</span>
+            </div>
+
+          </div>
+          <div class="tech-tags">
+            <span class="tech-tag">React</span>
+            <span class="tech-tag">Vite</span>
+            <span class="tech-tag">Canvas API</span>
+            <span class="tech-tag">Panoptes API</span>
+          </div>
+          <div class="project-links">
+            <a href="https://github.com/astrohayley/cosmic-canvas" target="_blank">GitHub</a>
+          </div>
+        </div>
+      </article>
+
+      <!-- Juno UVS Aurora Viewer -->
+      <article class="project-card">
+        <img class="project-screenshot" src="screenshots/uvsmapviewer.png" alt="UVS Map Viewer screenshot" />
+        <div class="project-info">
+          <h3>Juno UVS Aurora Viewer</h3>
+          <div class="project-tagline">Mapping Jupiter's ultraviolet aurora</div>
+          <p class="project-description">
+            An interactive map viewer for Juno UVS (Ultraviolet Spectrograph) data.
+            Displays UV photon counts from NASA's Juno spacecraft on a Leaflet map using Jupiter's
+            native north polar stereographic projection. Volunteers click to place measurement
+            points that capture geographic coordinates and UV intensity readings.
+          </p>
+          <div class="project-meta">
+            <div class="project-meta-item">
+              <span class="project-meta-label">Author</span>
+              <span class="project-meta-value">Ramanakumar Sankar (<a href="https://github.com/ramanakumars" target="_blank">@ramanakumars</a>)</span>
+            </div>
+
+          </div>
+          <div class="tech-tags">
+            <span class="tech-tag">React</span>
+            <span class="tech-tag">TypeScript</span>
+            <span class="tech-tag">Vite</span>
+            <span class="tech-tag">Leaflet</span>
+            <span class="tech-tag">FastAPI</span>
+            <span class="tech-tag">GeoTIFF</span>
+          </div>
+          <div class="project-links">
+            <a href="https://github.com/ramanakumars/UVSMapViewer" target="_blank">GitHub</a>
+          </div>
+        </div>
+      </article>
+
+      <!-- Solar Jet Hunter: Velocity -->
+      <article class="project-card">
+        <img class="project-screenshot" src="screenshots/sjh-time-distance.png" alt="Solar Jet Hunter Time-Distance screenshot" />
+        <div class="project-info">
+          <h3>Solar Jet Hunter: Velocity</h3>
+          <div class="project-tagline">Measuring solar jet speeds from time-distance plots</div>
+          <p class="project-description">
+            A Streamlit-based annotation tool for the Solar Jet Hunter citizen science project.
+            Volunteers draw lines on time-distance diagrams of solar jets observed by NASA's SDO/AIA instrument,
+            enabling measurement of jet velocities in the solar chromosphere and corona.
+          </p>
+          <div class="project-meta">
+            <div class="project-meta-item">
+              <span class="project-meta-label">Author</span>
+              <span class="project-meta-value">Sophie Musset (<a href="https://github.com/somusset" target="_blank">@somusset</a>)</span>
+            </div>
+
+          </div>
+          <div class="tech-tags">
+            <span class="tech-tag">Python</span>
+            <span class="tech-tag">Streamlit</span>
+            <span class="tech-tag">Docker</span>
+            <span class="tech-tag">Panoptes API</span>
+          </div>
+          <div class="project-links">
+            <a class="live-link" href="https://solarjethunter-velocity.streamlit.app" target="_blank">Live App</a>
+            <a href="https://github.com/somusset/SJH_IFE_time-distance" target="_blank">GitHub</a>
+          </div>
+        </div>
+      </article>
+
+      <!-- ZooIFE -->
+      <article class="project-card">
+        <img class="project-screenshot" src="screenshots/zooife.png" alt="ZooIFE screenshot" />
+        <div class="project-info">
+          <h3>ZooIFE</h3>
+          <div class="project-tagline">AI-assisted image segmentation for Zooniverse</div>
+          <p class="project-description">
+            An interactive classification interface that integrates Meta's SAM2 (Segment Anything Model)
+            with the Zooniverse platform. Volunteers use point, freehand, and brush tools to highlight
+            regions of interest, with SAM2 providing real-time segmentation assistance.
+          </p>
+          <div class="project-meta">
+            <div class="project-meta-item">
+              <span class="project-meta-label">Author</span>
+              <span class="project-meta-value">Kameswara Bharadwaj Mantha (<a href="https://github.com/AgentM-GEG" target="_blank">@AgentM-GEG</a>)</span>
+            </div>
+
+          </div>
+          <div class="tech-tags">
+            <span class="tech-tag">React</span>
+            <span class="tech-tag">TypeScript</span>
+            <span class="tech-tag">Vite</span>
+            <span class="tech-tag">Zustand</span>
+            <span class="tech-tag">SAM2</span>
+            <span class="tech-tag">react-konva</span>
+          </div>
+          <div class="project-links">
+            <a href="https://github.com/AgentM-GEG/ZooIFE" target="_blank">GitHub</a>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>Zooniverse Incubator Front-Ends &mdash; April 2026</p>
+  </footer>
+
+</body>
 </html>
